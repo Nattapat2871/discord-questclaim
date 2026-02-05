@@ -1,8 +1,10 @@
-# Discord Quest Claimer (Ultimate Edition)
+# Discord Quest Claimer 
 
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-yellow?style=for-the-badge&logo=javascript)
 ![Discord](https://img.shields.io/badge/Discord-Desktop-5865F2?style=for-the-badge&logo=discord)
 ![Version](https://img.shields.io/badge/Version-5.0_Stable-green)
+
+![Visitor Badge](https://api.visitorbadge.io/api/VisitorHit?user=Nattapat2871&repo=discord-questclaim&countColor=%237B1E7A)
 
 A powerful, stealthy, and feature-rich JavaScript tool designed to automatically complete **Discord Quests** (Play, Stream, Watch, and Activities) directly from the Discord client console.
 
