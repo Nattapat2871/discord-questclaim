@@ -4,7 +4,7 @@
     // ============================================================
     const PREFIX = "[Discord-QuestClaim]";
     
-    console.log(`%c${PREFIX} By Nattapat2871`, "color: #5865F2; font-weight: bold; font-size: 14px;");
+    console.log(`%c${PREFIX} By Nattapat2871 (v5.2 Reliable Sync)`, "color: #5865F2; font-weight: bold; font-size: 14px;");
     console.log(`%c${PREFIX} if you want to close this script use \`nam.close()\``, "color: #faa61a");
     console.log(`%c${PREFIX} ⚙️ Initializing...`, "color: cyan");
 
@@ -29,7 +29,6 @@
     let ChannelStore = findModule(['getChannel', 'getDMFromUserId']); 
     let GuildChannelStore = findModule(['getSFWDefaultChannel']);
 
-    // Fallback search
     if (!RunningGameStore || !QuestsStore) {
         RunningGameStore = Object.values(wpRequire.c).find(x => x?.exports?.ZP?.getRunningGames)?.exports?.ZP ?? Object.values(wpRequire.c).find(x => x?.exports?.Ay?.getRunningGames)?.exports?.Ay;
         QuestsStore = Object.values(wpRequire.c).find(x => x?.exports?.Z?.__proto__?.getQuest)?.exports?.Z ?? Object.values(wpRequire.c).find(x => x?.exports?.A?.__proto__?.getQuest)?.exports?.A;
@@ -116,7 +115,7 @@
     }
 
     // ============================================================
-    // 3. LOGIC 
+    // 3. LOGIC (Safe Increment)
     // ============================================================
     class QuestSpoofer {
         constructor(mods) {
@@ -227,27 +226,24 @@
         }
 
         async waitLoop(name, durationSeconds) {
-            const safeDuration = durationSeconds + 30; // Safety buffer
+            const safeDuration = durationSeconds + 30; 
             const startTime = Date.now();
             const endTime = startTime + (safeDuration * 1000);
-            
             let lastLoggedMinute = -1;
 
             while (Date.now() < endTime && this.isRunning) {
-                // Calculate remaining time based on LOCAL Clock
                 const timeLeft = Math.max(0, endTime - Date.now());
                 const totalSeconds = Math.ceil(timeLeft / 1000);
                 const mins = Math.floor(totalSeconds / 60);
                 const secs = totalSeconds % 60;
                 const timeString = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
-                this.ui.update(`Accepting quests : ${name}`, `${timeString} minute remaining.`);
+                this.ui.update(`กำลังทำเควส: ${name}`, `เหลือเวลาอีก ${timeString} นาที`);
 
                 if (mins !== lastLoggedMinute && mins > 0) {
                     this.log(`⌛ ${mins} minute remaining.`, "color: #00ffff; font-weight: bold;");
                     lastLoggedMinute = mins;
                 }
-                
                 await new Promise(r => setTimeout(r, 1000));
             }
         }
@@ -293,17 +289,38 @@
             const questName = quest.config.messages.questName;
             this.ui.update(`Watching: ${questName}`, `Progress: ${current}/${target}`);
             
+            // Loop จะทำงานก็ต่อเมื่อ progress (current) ยังน้อยกว่าเป้าหมาย
             while (current < target && this.isRunning) {
+                // 1. คำนวณเวลาที่อยากจะส่ง (แต่ยังไม่บวกใส่ current จริงๆ)
+                const nextStep = Math.min(target, current + 30);
                 const jitter = Math.random() * 0.9;
-                current = Math.min(target, current + 30);
-                const timestampToSend = current + jitter;
+                const timestampToSend = nextStep + jitter;
 
-                await this.m.api.post({ url: `/quests/${quest.id}/video-progress`, body: { timestamp: timestampToSend } });
-                
-                this.ui.update(`Watching Video...`, `Progress: ${Math.floor(current)}/${target}`);
-                this.log(`📺 Video Progress: ${Math.floor(current)}/${target}`, "color: #00ffff");
-                await new Promise(r => setTimeout(r, 2000));
+                try {
+                    // 2. ส่งข้อมูล
+                    await this.m.api.post({ url: `/quests/${quest.id}/video-progress`, body: { timestamp: timestampToSend } });
+                    
+                    // 3. ***สำคัญ*** ส่งผ่านแล้วค่อยอัปเดต current
+                    current = nextStep;
+                    
+                    this.ui.update(`Watching Video...`, `Progress: ${Math.floor(current)}/${target}`);
+                    this.log(`📺 Video Progress: ${Math.floor(current)}/${target}`, "color: #00ffff");
+                    
+                    // รอ 2 วินาทีค่อยไปรอบต่อไป
+                    await new Promise(r => setTimeout(r, 2000));
+
+                } catch (e) {
+                    // 4. ถ้า Error (400 Bad Request หรือ Net หลุด)
+                    const errorMsg = e.body?.message || e.message || "Unknown Error";
+                    console.warn(`${PREFIX} ⚠️ Network/API Error (Retrying in 5s...):`, errorMsg);
+                    
+                    this.ui.update(`Connection Error`, `Retrying...`);
+                    
+                    // ***สำคัญ*** ไม่บวก current, รอ 5 วินาที แล้ววนลูปเดิม (ส่งเวลาเดิม)
+                    await new Promise(r => setTimeout(r, 5000));
+                }
             }
+            
             this.playSuccessSound();
             this.log(`quest successfully : ${questName}`, "color: #57F287");
         }
@@ -323,14 +340,19 @@
 
             const interval = setInterval(async () => {
                 if (!this.isRunning) clearInterval(interval);
-                await this.m.api.post({url: `/quests/${quest.id}/heartbeat`, body: {stream_key: streamKey, terminal: false}});
+                try {
+                    await this.m.api.post({url: `/quests/${quest.id}/heartbeat`, body: {stream_key: streamKey, terminal: false}});
+                } catch (e) {
+                    console.warn(`${PREFIX} ⚠️ Network Error during activity heartbeat:`, e.message);
+                }
             }, 20000);
 
-            // Use timer loop for visual feedback instead of polling progress
             await this.waitLoop(questName, target);
             
             clearInterval(interval);
-            await this.m.api.post({url: `/quests/${quest.id}/heartbeat`, body: {stream_key: streamKey, terminal: true}});
+            try {
+                await this.m.api.post({url: `/quests/${quest.id}/heartbeat`, body: {stream_key: streamKey, terminal: true}});
+            } catch(e) {}
             
             this.playSuccessSound();
             this.log(`quest successfully : ${questName}`, "color: #57F287");
