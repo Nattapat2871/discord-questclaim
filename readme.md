@@ -12,6 +12,8 @@ A powerful, stealthy, and feature-rich JavaScript tool designed to automatically
 
 ---
 
+<img width="1550" height="1023" alt="image" src="https://github.com/user-attachments/assets/f69014ef-6634-4754-bbb1-920825481587" />
+
 ## 🌟 Key Features
 
 * **All Quest Types Supported:**
