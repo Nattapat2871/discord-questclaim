@@ -6,6 +6,8 @@
 
 ![Visitor Badge](https://api.visitorbadge.io/api/VisitorHit?user=Nattapat2871&repo=discord-questclaim&countColor=%237B1E7A)
 
+Language : [🇺🇸 English](README.md) | [🇹🇭 ไทย](README_th.md)
+
 A powerful, stealthy, and feature-rich JavaScript tool designed to automatically complete **Discord Quests** (Play, Stream, Watch, and Activities) directly from the Discord client console.
 
 **Developed by [Nattapat2871](https://github.com/Nattapat2871)**
@@ -31,6 +33,19 @@ A powerful, stealthy, and feature-rich JavaScript tool designed to automatically
 
 > **This script DOES NOT work in a web browser (Chrome, Edge, etc.) for Game Quests!**
 > Discord has updated their system to check for local processes. You **MUST** use the **Discord Desktop App** (Stable, PTB, or Canary) to complete Play/Stream quests.
+
+## 🛠️ Prerequisites: Enable Developer Console
+
+By default, Discord disables the Developer Console. You must enable it first to be able to paste the script. We have prepared a quick command to do this for you automatically!
+
+1. Press `Windows + R` on your keyboard, type `cmd`, and hit **Enter** to open the Command Prompt.
+2. **Copy and paste** the following command into the CMD window and hit **Enter**:
+
+   ```cmd
+   echo [INFO] Closing Discord... & taskkill /f /im discord.exe >nul 2>&1 & timeout /t 2 >nul & echo [INFO] Updating settings.json... & (echo {& echo   "IS_MAXIMIZED": false,& echo   "IS_MINIMIZED": false,& echo   "WINDOW_BOUNDS": {& echo     "x": 295,& echo     "y": 167,& echo     "width": 1284,& echo     "height": 724& echo   },& echo   "DANGEROUS_ENABLE_DEVTOOLS_ONLY_ENABLE_IF_YOU_KNOW_WHAT_YOURE_DOING": true,& echo   "MIN_WIDTH": 940,& echo   "MIN_HEIGHT": 500,& echo   "chromiumSwitches": {},& echo   "BACKGROUND_COLOR": "#2c2d32",& echo   "openH264Enabled": true,& echo   "audioSubsystem": "experimental",& echo   "offloadAdmControls": true& echo }) > "%appdata%\discord\settings.json" & echo [INFO] Starting Discord... & start "" "%localappdata%\Discord\Update.exe" --processStart discord.exe & echo [INFO] Done!
+   ```
+
+3. The script will automatically close Discord, enable the Developer Console, and reopen Discord for you.
 
 ## 🚀 How to Use
 
