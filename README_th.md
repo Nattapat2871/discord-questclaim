@@ -8,7 +8,7 @@
 
 ![Visitor Badge](https://api.visitorbadge.io/api/VisitorHit?user=Nattapat2871&repo=discord-questclaim&countColor=%237B1E7A)
 
-เครื่องมือ JavaScript ที่ทรงพลัง แยบยล และเต็มไปด้วยฟีเจอร์ ออกแบบมาเพื่อทำ **Discord Quests** (เล่นเกม, สตรีม, ดูวิดีโอ, และกิจกรรม) ให้สำเร็จโดยอัตโนมัติผ่าน Developer Console ของแอป Discord โดยตรง
+เครื่องมือ JavaScript ที่ทรงพลัง แยบยล และเต็มไปด้วยฟีเจอร์ ออกแบบมาเพื่อทำ **Discord Quests** (เล่นเกม, สตรีม, ดูวิดีโอ, และกิจกรรม) ให้สำเร็จโดยอัตโนมัติผ่าน Developer Console ของแอป Discord โดยตรง   ไม่ต้องโหลดเกมก็ทำเควสได้ทุกอัน
 
 **พัฒนาโดย [Nattapat2871](https://github.com/Nattapat2871)**
 
