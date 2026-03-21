@@ -4,7 +4,7 @@
     // ============================================================
     const PREFIX = "[Discord-QuestClaim]";
     
-    console.log(`%c${PREFIX} By Nattapat2871 (v6.12 General Edition - Background Watcher)`, "color: #5865F2; font-weight: bold; font-size: 14px;");
+    console.log(`%c${PREFIX} By Nattapat2871 (v6.5 - General Edition )`, "color: #5865F2; font-weight: bold; font-size: 14px;");
     console.log(`%c${PREFIX} If you want to close this script use \`nam.close()\``, "color: #faa61a");
     console.log(`%c${PREFIX} ⚙️ Initializing...`, "color: cyan");
 
