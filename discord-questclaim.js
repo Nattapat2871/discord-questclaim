@@ -4,7 +4,7 @@
     // ============================================================
     const PREFIX = "[Discord-QuestClaim]";
     
-    console.log(`%c${PREFIX} By Nattapat2871 (v5.2 Reliable Sync)`, "color: #5865F2; font-weight: bold; font-size: 14px;");
+    console.log(`%c${PREFIX} By Nattapat2871 (v6.4 General Edition - Real-time Sync)`, "color: #5865F2; font-weight: bold; font-size: 14px;");
     console.log(`%c${PREFIX} if you want to close this script use \`nam.close()\``, "color: #faa61a");
     console.log(`%c${PREFIX} ⚙️ Initializing...`, "color: cyan");
 
@@ -51,14 +51,14 @@
     }
 
     // ============================================================
-    // 2. UI MANAGER
+    // 2. UI MANAGER (Status Overlay)
     // ============================================================
     class OverlayUI {
         constructor() {
             this.element = null;
         }
 
-        create(onClose) {
+        buildInterface(onClose) {
             if (this.element) return;
             this.element = document.createElement('div');
             this.element.id = 'quest-claimer-overlay';
@@ -98,7 +98,7 @@
             if (closeBtn) closeBtn.onclick = onClose;
         }
 
-        update(text, subtext = "") {
+        updateStatus(text, subtext = "") {
             if (!this.element) return;
             const statusEl = this.element.querySelector('#quest-status-text');
             const timeEl = this.element.querySelector('#quest-time-text');
@@ -106,7 +106,7 @@
             if (timeEl) timeEl.innerText = subtext;
         }
 
-        remove() {
+        destroyInterface() {
             if (this.element) {
                 this.element.remove();
                 this.element = null;
@@ -115,25 +115,26 @@
     }
 
     // ============================================================
-    // 3. LOGIC (Safe Increment)
+    // 3. LOGIC (Hybrid Real-time & Server Sync)
     // ============================================================
-    class QuestSpoofer {
+    class QuestAutomator {
         constructor(mods) {
             this.m = mods;
             this.ui = new OverlayUI();
-            this.isRunning = true;
-            this.originalGetRunningGames = null;
-            this.originalGetStreamMetadata = null;
-            this.fakeGameRef = null;
-            this.isApp = typeof DiscordNative !== "undefined";
+            this.isActive = true;
+            this.cachedGetRunningGames = null;
+            this.cachedGetGameForPID = null;
+            this.cachedGetStreamMetadata = null;
+            this.simulatedGameData = null;
+            this.isDesktopClient = typeof DiscordNative !== "undefined";
         }
 
-        log(msg, style = "") {
+        printLog(msg, style = "") {
             if (style) console.log(`%c${PREFIX} ${msg}`, style);
             else console.log(`${PREFIX} ${msg}`);
         }
 
-        playSuccessSound() {
+        triggerSuccessAudio() {
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 if (!AudioContext) return;
@@ -152,7 +153,7 @@
             } catch (e) {}
         }
 
-        get activeQuests() {
+        get availableQuests() {
             let qRaw = this.m.QuestsStore.quests;
             if (!qRaw && this.m.QuestsStore.getQuests) qRaw = this.m.QuestsStore.getQuests();
             const quests = qRaw instanceof Map ? [...qRaw.values()] : Object.values(qRaw || {});
@@ -166,34 +167,47 @@
             });
         }
 
-        async run() {
-            this.ui.create(() => this.cleanup());
-            this.ui.update("Scanning for quests...");
-            
-            const quests = this.activeQuests;
-            if (quests.length === 0) {
-                this.log("🔎 Found 0 active quests.");
-                this.ui.update("No active quests found.", "Idle");
-                setTimeout(() => this.cleanup(), 5000);
-                return;
-            }
-
-            this.log(`🔎 Found ${quests.length} active quests.`, "color: lightgreen");
-
-            for (const quest of quests) {
-                if (!this.isRunning) break;
-                await this.processQuest(quest);
-            }
-
-            if (this.isRunning) {
-                this.playSuccessSound();
-                this.log("🎉 All quests finished!", "color: gold; font-weight: bold");
-                this.ui.update("🎉 All quests finished!", "You can claim rewards now.");
-                setTimeout(() => this.cleanup(), 10000);
+        async autoRedeemReward(quest) {
+            const questName = quest.config.messages.questName;
+            try {
+                this.printLog(`🎁 กำลังพยายามกดรับรางวัลสำหรับเควส: ${questName}...`, "color: #faa61a");
+                await this.m.api.post({ url: `/quests/${quest.id}/claim` });
+                this.printLog(`✅ รับรางวัลเควส ${questName} สำเร็จแล้ว!`, "color: #57F287; font-weight: bold;");
+                this.ui.updateStatus(`Claimed: ${questName}`, `ได้รับของรางวัลเรียบร้อย!`);
+            } catch (e) {
+                const errorMsg = e.body?.message || e.message || "Unknown Error";
+                this.printLog(`⚠️ ไม่สามารถรับรางวัล ${questName} อัตโนมัติได้ (อาจจะต้องไปกดรับเอง): ${errorMsg}`, "color: red");
             }
         }
 
-        async processQuest(quest) {
+        async startFarming() {
+            this.ui.buildInterface(() => this.terminateScript());
+            this.ui.updateStatus("Scanning for quests...");
+            
+            const quests = this.availableQuests;
+            if (quests.length === 0) {
+                this.printLog("🔎 Found 0 active quests.");
+                this.ui.updateStatus("No active quests found.", "Idle");
+                setTimeout(() => this.terminateScript(), 5000);
+                return;
+            }
+
+            this.printLog(`🔎 Found ${quests.length} active quests.`, "color: lightgreen");
+
+            for (const quest of quests) {
+                if (!this.isActive) break;
+                await this.executeQuestBypass(quest);
+            }
+
+            if (this.isActive) {
+                this.triggerSuccessAudio();
+                this.printLog("🎉 All quests finished!", "color: gold; font-weight: bold");
+                this.ui.updateStatus("🎉 All quests finished!", "Done.");
+                setTimeout(() => this.terminateScript(), 10000);
+            }
+        }
+
+        async executeQuestBypass(quest) {
             const config = quest.config.taskConfig || quest.config.taskConfigV2;
             const supported = ["WATCH_VIDEO", "WATCH_VIDEO_ON_MOBILE", "PLAY_ON_DESKTOP", "STREAM_ON_DESKTOP", "PLAY_ACTIVITY"];
             const taskType = Object.keys(config.tasks).find(k => supported.includes(k));
@@ -204,185 +218,265 @@
 
             if (remaining <= 0) return;
 
-            this.log(`Processing: ${questName} (${taskType})`, "color: cyan");
+            this.printLog(`Processing: ${questName} (${taskType})`, "color: cyan");
 
             if (taskType === "PLAY_ON_DESKTOP") {
-                if (!this.isApp) {
-                    this.log(`⚠️ Skipping ${questName}: Must use Discord Desktop App for this quest.`, "color: red");
+                if (!this.isDesktopClient) {
+                    this.printLog(`⚠️ Skipping ${questName}: Must use Discord Desktop App for this quest.`, "color: red");
                     return;
                 }
-                await this.spoofGame(quest, remaining);
+                await this.emulateDesktopGame(quest, target, taskType);
             } else if (taskType === "STREAM_ON_DESKTOP") {
-                if (!this.isApp) {
-                    this.log(`⚠️ Skipping ${questName}: Must use Discord Desktop App for this quest.`, "color: red");
+                if (!this.isDesktopClient) {
+                    this.printLog(`⚠️ Skipping ${questName}: Must use Discord Desktop App for this quest.`, "color: red");
                     return;
                 }
-                await this.spoofStream(quest, remaining);
+                await this.emulateStreaming(quest, target, taskType);
             } else if (taskType === "WATCH_VIDEO" || taskType === "WATCH_VIDEO_ON_MOBILE") {
-                await this.spoofVideo(quest, target, current);
+                await this.emulateVideoWatch(quest, target, current);
             } else if (taskType === "PLAY_ACTIVITY") {
-                await this.spoofActivity(quest, target);
+                await this.emulateActivity(quest, target);
+            }
+
+            if (this.isActive) {
+                await this.autoRedeemReward(quest);
             }
         }
 
-        async waitLoop(name, durationSeconds) {
-            const safeDuration = durationSeconds + 30; 
-            const startTime = Date.now();
-            const endTime = startTime + (safeDuration * 1000);
-            let lastLoggedMinute = -1;
+        // ============================================================
+        // ฟังก์ชันใหม่: นับเวลาเรียลไทม์ + Sync เซิร์ฟเวอร์ + Logs แจ้งเตือนเวลา
+        // ============================================================
+        monitorServerSync(quest, targetSeconds, taskName, appName) {
+            return new Promise((resolve) => {
+                let currentProgress = quest.config.configVersion === 1 ? quest.userStatus?.streamProgressSeconds : quest.userStatus?.progress?.[taskName]?.value;
+                currentProgress = Math.floor(currentProgress || 0);
 
-            while (Date.now() < endTime && this.isRunning) {
-                const timeLeft = Math.max(0, endTime - Date.now());
-                const totalSeconds = Math.ceil(timeLeft / 1000);
-                const mins = Math.floor(totalSeconds / 60);
-                const secs = totalSeconds % 60;
-                const timeString = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                let lastLoggedMinute = -1; // สำหรับ Log เวลาที่เหลือ
 
-                this.ui.update(`กำลังทำเควส: ${name}`, `เหลือเวลาอีก ${timeString} นาที`);
+                const updateUIProgress = (prog) => {
+                    const remaining = Math.max(0, targetSeconds - prog);
+                    const mins = Math.floor(remaining / 60);
+                    const secs = remaining % 60;
+                    const timeString = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                    this.ui.updateStatus(`กำลังทำเควส: ${appName}`, `ความคืบหน้า: ${prog}/${targetSeconds} วิ (เหลือ ${timeString})`);
 
-                if (mins !== lastLoggedMinute && mins > 0) {
-                    this.log(`⌛ ${mins} minute remaining.`, "color: #00ffff; font-weight: bold;");
-                    lastLoggedMinute = mins;
-                }
-                await new Promise(r => setTimeout(r, 1000));
+                    // เพิ่มการแจ้งเตือนเวลาใน Console
+                    if (mins !== lastLoggedMinute && mins > 0) {
+                        this.printLog(`⌛ ${mins} minute remaining.`, "color: #00ffff; font-weight: bold;");
+                        lastLoggedMinute = mins;
+                    }
+                };
+
+                updateUIProgress(currentProgress);
+
+                const realTimeTick = setInterval(() => {
+                    if (!this.isActive) {
+                        clearInterval(realTimeTick);
+                        return;
+                    }
+                    if (currentProgress < targetSeconds) {
+                        currentProgress++;
+                        updateUIProgress(currentProgress);
+                    }
+                }, 1000);
+
+                const onHeartbeatTick = (data) => {
+                    if (!this.isActive) {
+                        clearInterval(realTimeTick);
+                        this.m.FluxDispatcher.unsubscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", onHeartbeatTick);
+                        return resolve();
+                    }
+                    
+                    let serverProgress = quest.config.configVersion === 1 ? data.userStatus?.streamProgressSeconds : data.userStatus?.progress?.[taskName]?.value;
+                    serverProgress = Math.floor(serverProgress || 0);
+
+                    currentProgress = serverProgress;
+                    updateUIProgress(currentProgress);
+                    
+                    this.printLog(`📡 Server Sync: ${serverProgress}/${targetSeconds} seconds`, "color: #b5bac1");
+                    
+                    if (serverProgress >= targetSeconds) {
+                        clearInterval(realTimeTick);
+                        this.m.FluxDispatcher.unsubscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", onHeartbeatTick);
+                        resolve();
+                    }
+                };
+                
+                this.m.FluxDispatcher.subscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", onHeartbeatTick);
+                
+                const backgroundCheck = setInterval(() => {
+                    if (!this.isActive) {
+                        clearInterval(backgroundCheck);
+                        clearInterval(realTimeTick);
+                        this.m.FluxDispatcher.unsubscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", onHeartbeatTick);
+                        resolve();
+                    }
+                }, 1000);
+            });
+        }
+
+        async emulateDesktopGame(quest, targetSeconds, taskType) {
+            const applicationId = quest.config.application.id;
+            const applicationName = quest.config.application.name;
+            const processId = Math.floor(Math.random() * 30000) + 1000;
+
+            this.ui.updateStatus(`กำลังเตรียมข้อมูลเกม: ${applicationName}...`);
+
+            try {
+                const res = await this.m.api.get({url: `/applications/public?application_ids=${applicationId}`});
+                const appData = res.body[0];
+                const targetExeName = appData.executables?.find(x => x.os === "win32")?.name?.replace(">", "") ?? appData.name.replace(/[\/\\:*?"<>|]/g, "");
+                
+                const mockedGameData = {
+                    cmdLine: `C:\\Program Files\\${appData.name}\\${targetExeName}`,
+                    exeName: targetExeName,
+                    exePath: `c:/program files/${appData.name.toLowerCase()}/${targetExeName}`,
+                    hidden: false,
+                    isLauncher: false,
+                    id: applicationId,
+                    name: appData.name,
+                    pid: processId,
+                    pidPath: [processId],
+                    processName: appData.name,
+                    start: Date.now(),
+                };
+
+                this.cachedGetRunningGames = this.m.RunningGameStore.getRunningGames;
+                this.cachedGetGameForPID = this.m.RunningGameStore.getGameForPID;
+                this.simulatedGameData = mockedGameData;
+                
+                const activeGamesList = [mockedGameData];
+                this.m.RunningGameStore.getRunningGames = () => activeGamesList;
+                this.m.RunningGameStore.getGameForPID = (p) => activeGamesList.find(x => x.pid === p);
+                this.m.FluxDispatcher.dispatch({ type: "RUNNING_GAMES_CHANGE", removed: [], added: [mockedGameData], games: activeGamesList });
+
+                this.printLog(`🎮 Emulating game "${applicationName}" (EXE: ${targetExeName})...`, "color: #faa61a; font-weight: bold; font-size: 13px;");
+                
+                await this.monitorServerSync(quest, targetSeconds, taskType, applicationName);
+                
+                this.triggerSuccessAudio();
+                this.printLog(`quest successfully : ${applicationName}`, "color: #57F287");
+                this.resetDiscordState();
+
+            } catch (error) {
+                this.printLog(`⚠️ Error setting up game emulator: ${error.message}`, "color: red");
             }
         }
 
-        async spoofGame(quest, durationSeconds) {
+        async emulateStreaming(quest, targetSeconds, taskType) {
             const { id, name } = quest.config.application;
-            const pid = Math.floor(Math.random() * 30000) + 1000;
-            const fakeGame = { name, id, pid, pidPath: [pid], exePath: "c:/fake/game.exe", processName: name, start: Date.now() };
+            const processId = Math.floor(Math.random() * 30000) + 1000;
 
-            this.originalGetRunningGames = this.m.RunningGameStore.getRunningGames;
-            this.fakeGameRef = fakeGame;
-            
-            this.m.RunningGameStore.getRunningGames = () => [fakeGame];
-            this.m.FluxDispatcher.dispatch({ type: "RUNNING_GAMES_CHANGE", removed: [], added: [fakeGame], games: [fakeGame] });
+            this.cachedGetStreamMetadata = this.m.ApplicationStreamingStore.getStreamerActiveStreamMetadata;
+            this.m.ApplicationStreamingStore.getStreamerActiveStreamMetadata = () => ({ id, pid: processId, sourceName: null });
 
-            this.log(`🎮 Playing "${name}"...`, "color: #faa61a; font-weight: bold; font-size: 13px;");
+            this.printLog(`🎥 Emulating stream for "${name}"...`, "color: #faa61a; font-weight: bold; font-size: 13px;");
             
-            await this.waitLoop(name, durationSeconds);
-            
-            this.playSuccessSound();
-            this.log(`quest successfully : ${name}`, "color: #57F287");
-            this.restoreDiscord();
+            await this.monitorServerSync(quest, targetSeconds, taskType, name);
+
+            this.triggerSuccessAudio();
+            this.printLog(`quest successfully : ${name}`, "color: #57F287");
+            this.resetDiscordState();
         }
 
-        async spoofStream(quest, durationSeconds) {
-            const { id, name } = quest.config.application;
-            const pid = Math.floor(Math.random() * 30000) + 1000;
-
-            this.originalGetStreamMetadata = this.m.ApplicationStreamingStore.getStreamerActiveStreamMetadata;
-            this.m.ApplicationStreamingStore.getStreamerActiveStreamMetadata = () => ({ id, pid, sourceName: null });
-
-            this.log(`🎥 Streaming "${name}"...`, "color: #faa61a; font-weight: bold; font-size: 13px;");
-            
-            await this.waitLoop(name, durationSeconds);
-
-            this.playSuccessSound();
-            this.log(`quest successfully : ${name}`, "color: #57F287");
-            this.restoreDiscord();
-        }
-
-        async spoofVideo(quest, target, start) {
-            let current = start;
+        async emulateVideoWatch(quest, target, start) {
+            let currentProgress = start;
             const questName = quest.config.messages.questName;
-            this.ui.update(`Watching: ${questName}`, `Progress: ${current}/${target}`);
+            this.ui.updateStatus(`Watching: ${questName}`, `Progress: ${currentProgress}/${target}`);
             
-            // Loop จะทำงานก็ต่อเมื่อ progress (current) ยังน้อยกว่าเป้าหมาย
-            while (current < target && this.isRunning) {
-                // 1. คำนวณเวลาที่อยากจะส่ง (แต่ยังไม่บวกใส่ current จริงๆ)
-                const nextStep = Math.min(target, current + 30);
-                const jitter = Math.random() * 0.9;
-                const timestampToSend = nextStep + jitter;
+            while (currentProgress < target && this.isActive) {
+                const stepForward = Math.min(target, currentProgress + 30);
+                const randomizedDelay = Math.random() * 0.9;
+                const timestampData = stepForward + randomizedDelay;
 
                 try {
-                    // 2. ส่งข้อมูล
-                    await this.m.api.post({ url: `/quests/${quest.id}/video-progress`, body: { timestamp: timestampToSend } });
+                    await this.m.api.post({ url: `/quests/${quest.id}/video-progress`, body: { timestamp: timestampData } });
                     
-                    // 3. ***สำคัญ*** ส่งผ่านแล้วค่อยอัปเดต current
-                    current = nextStep;
+                    currentProgress = stepForward;
+                    this.ui.updateStatus(`Watching Video...`, `Progress: ${Math.floor(currentProgress)}/${target}`);
+                    this.printLog(`📺 Video Sync: ${Math.floor(currentProgress)}/${target}`, "color: #00ffff");
                     
-                    this.ui.update(`Watching Video...`, `Progress: ${Math.floor(current)}/${target}`);
-                    this.log(`📺 Video Progress: ${Math.floor(current)}/${target}`, "color: #00ffff");
-                    
-                    // รอ 2 วินาทีค่อยไปรอบต่อไป
                     await new Promise(r => setTimeout(r, 2000));
-
                 } catch (e) {
-                    // 4. ถ้า Error (400 Bad Request หรือ Net หลุด)
                     const errorMsg = e.body?.message || e.message || "Unknown Error";
-                    console.warn(`${PREFIX} ⚠️ Network/API Error (Retrying in 5s...):`, errorMsg);
-                    
-                    this.ui.update(`Connection Error`, `Retrying...`);
-                    
-                    // ***สำคัญ*** ไม่บวก current, รอ 5 วินาที แล้ววนลูปเดิม (ส่งเวลาเดิม)
+                    console.warn(`${PREFIX} ⚠️ Network Issue (Retrying...):`, errorMsg);
+                    this.ui.updateStatus(`Connection Issue`, `Retrying...`);
                     await new Promise(r => setTimeout(r, 5000));
                 }
             }
             
-            this.playSuccessSound();
-            this.log(`quest successfully : ${questName}`, "color: #57F287");
+            this.triggerSuccessAudio();
+            this.printLog(`quest successfully : ${questName}`, "color: #57F287");
         }
 
-        async spoofActivity(quest, target) {
+        async emulateActivity(quest, target) {
             const questName = quest.config.messages.questName;
-            const channelId = this.m.ChannelStore.getSortedPrivateChannels()[0]?.id 
+            const activeChannel = this.m.ChannelStore.getSortedPrivateChannels()[0]?.id 
                             ?? Object.values(this.m.GuildChannelStore.getAllGuilds() || {}).find(x => x?.VOCAL?.length > 0)?.VOCAL[0]?.channel.id;
             
-            if (!channelId) {
-                this.log("⚠️ Cannot find a voice channel for PLAY_ACTIVITY.", "color: red");
+            if (!activeChannel) {
+                this.printLog("⚠️ Activity emulation requires an active voice channel.", "color: red");
                 return;
             }
 
-            const streamKey = `call:${channelId}:1`;
-            this.log(`🧩 Doing Activity: ${questName}`, "color: #faa61a");
-
-            const interval = setInterval(async () => {
-                if (!this.isRunning) clearInterval(interval);
+            const activeStreamKey = `call:${activeChannel}:1`;
+            this.printLog(`🧩 Emulating Activity: ${questName}`, "color: #faa61a");
+            
+            let progressData = 0;
+            const backgroundPulse = setInterval(async () => {
+                if (!this.isActive) clearInterval(backgroundPulse);
                 try {
-                    await this.m.api.post({url: `/quests/${quest.id}/heartbeat`, body: {stream_key: streamKey, terminal: false}});
+                    const res = await this.m.api.post({url: `/quests/${quest.id}/heartbeat`, body: {stream_key: activeStreamKey, terminal: false}});
+                    progressData = res.body.progress.PLAY_ACTIVITY.value;
+                    this.ui.updateStatus(`ทำกิจกรรม: ${questName}`, `ความคืบหน้า: ${progressData}/${target}`);
+                    this.printLog(`🧩 Activity Sync: ${progressData}/${target}`, "color: #b5bac1");
+                    
+                    if (progressData >= target) {
+                        clearInterval(backgroundPulse);
+                        await this.m.api.post({url: `/quests/${quest.id}/heartbeat`, body: {stream_key: activeStreamKey, terminal: true}});
+                    }
                 } catch (e) {
-                    console.warn(`${PREFIX} ⚠️ Network Error during activity heartbeat:`, e.message);
+                    console.warn(`${PREFIX} ⚠️ Network Drop during activity:`, e.message);
                 }
             }, 20000);
 
-            await this.waitLoop(questName, target);
+            while (progressData < target && this.isActive) {
+                await new Promise(r => setTimeout(r, 2000));
+            }
             
-            clearInterval(interval);
-            try {
-                await this.m.api.post({url: `/quests/${quest.id}/heartbeat`, body: {stream_key: streamKey, terminal: true}});
-            } catch(e) {}
-            
-            this.playSuccessSound();
-            this.log(`quest successfully : ${questName}`, "color: #57F287");
+            this.triggerSuccessAudio();
+            this.printLog(`quest successfully : ${questName}`, "color: #57F287");
         }
 
-        restoreDiscord() {
-            if (this.originalGetRunningGames) {
-                this.m.RunningGameStore.getRunningGames = this.originalGetRunningGames;
-                this.originalGetRunningGames = null;
+        resetDiscordState() {
+            if (this.cachedGetRunningGames) {
+                this.m.RunningGameStore.getRunningGames = this.cachedGetRunningGames;
+                this.cachedGetRunningGames = null;
             }
-            if (this.originalGetStreamMetadata) {
-                this.m.ApplicationStreamingStore.getStreamerActiveStreamMetadata = this.originalGetStreamMetadata;
-                this.originalGetStreamMetadata = null;
+            if (this.cachedGetGameForPID) {
+                this.m.RunningGameStore.getGameForPID = this.cachedGetGameForPID;
+                this.cachedGetGameForPID = null;
             }
-            if (this.fakeGameRef) {
-                this.m.FluxDispatcher.dispatch({ type: "RUNNING_GAMES_CHANGE", removed: [this.fakeGameRef], added: [], games: [] });
-                this.fakeGameRef = null;
+            if (this.cachedGetStreamMetadata) {
+                this.m.ApplicationStreamingStore.getStreamerActiveStreamMetadata = this.cachedGetStreamMetadata;
+                this.cachedGetStreamMetadata = null;
+            }
+            if (this.simulatedGameData) {
+                this.m.FluxDispatcher.dispatch({ type: "RUNNING_GAMES_CHANGE", removed: [this.simulatedGameData], added: [], games: [] });
+                this.simulatedGameData = null;
             }
         }
 
-        cleanup() {
-            this.isRunning = false;
-            this.restoreDiscord();
-            this.ui.remove();
-            this.log("🛑 Script stopped and cleaned up.", "color: red");
+        terminateScript() {
+            this.isActive = false;
+            this.resetDiscordState();
+            this.ui.destroyInterface();
+            this.printLog("🛑 Script terminated safely.", "color: red");
             delete window.nam;
         }
     }
 
-    const bot = new QuestSpoofer(modules);
-    window.nam = { close: () => bot.cleanup() };
-    bot.run();
+    const runner = new QuestAutomator(modules);
+    window.nam = { close: () => runner.terminateScript() };
+    runner.startFarming();
 })();
