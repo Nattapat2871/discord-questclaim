@@ -32,6 +32,8 @@ Language : [🇺🇸 English](README.md) | [🇹🇭 ไทย](README_th.md)
 >* **Desktop Client Only:** This script relies on internal Discord Desktop stores. It **will not work** in a web browser for game-based quests.
 >* **Stealth Logic:** While this script uses "Force Timer" logic and human-like jitter to minimize detection, please understand that no automation is 100% invisible to server-side checks.
 
+---
+
 A powerful, stealthy, and feature-rich JavaScript tool designed to automatically complete **Discord Quests** (Play, Stream, Watch, and Activities) directly from the Discord client console.
 
 **Developed by [Nattapat2871](https://github.com/Nattapat2871)**
