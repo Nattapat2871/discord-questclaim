@@ -14,7 +14,7 @@ Language : [🇺🇸 English](README.md) | [🇹🇭 ไทย](README_th.md)
 > 
 > Discord has recently updated their security systems to detect **"Inauthentic Engagement"**. Many users have already received the following system message:
 > 
-> <img width="836" height="272" alt="image" src="https://github.com/user-attachments/assets/751e8e41-37e2-41da-932c-304a1a7c6a8a" />
+> <img width="1212" height="226" alt="image" src="https://github.com/user-attachments/assets/5ab95d21-4413-4191-a77a-5b2031e93b76" />
 > 
 > There isn't much that can be done to make any script 100% undetected. **Use this tool at your own risk**, as you most likely **WILL** get flagged by doing so.
 >
