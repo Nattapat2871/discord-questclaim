@@ -8,6 +8,30 @@
 
 Language : [🇺🇸 English](README.md) | [🇹🇭 ไทย](README_th.md)
 
+> [!CAUTION]
+> # 🚩 IMPORTANT: QUEST AUTOMATION CRACKDOWN (APRIL 2026)
+> **As of April 7th, 2026, Discord has expressed their intent to crack down on automating quest completion.**
+> 
+> Discord has recently updated their security systems to detect **"Inauthentic Engagement"**. Many users have already received the following system message:
+> 
+> <img width="836" height="272" alt="image" src="https://github.com/user-attachments/assets/751e8e41-37e2-41da-932c-304a1a7c6a8a" />
+> 
+> There isn't much that can be done to make any script 100% undetected. **Use this tool at your own risk**, as you most likely **WILL** get flagged by doing so.
+>
+>## ⚠️ Detailed Risk Information
+>
+>### 1. Discord Crackdown
+>Discord has actively started flagging accounts using scripts for Quest automation. If flagged, you will receive an official **"Quest Activity Notice"** warning. Continued use may lead to permanent **Quest access limitations** or further account actions.
+>
+>### 2. Risk Acknowledgment
+>* **Detection:** Any script bypassing Quest requirements carries a high risk of being flagged by Discord's anti-cheat and telemetry systems.
+>* **Liability:** By using this tool, you acknowledge that **you are solely responsible** for any actions taken against your account (e.g., Quest restrictions or account suspension).
+>* **Recommendation:** If you value your main account or have already received a warning, it is highly recommended to complete Quests manually or use an alternative account for testing.
+>
+>### 3. Technical Requirement & Stealth
+>* **Desktop Client Only:** This script relies on internal Discord Desktop stores. It **will not work** in a web browser for game-based quests.
+>* **Stealth Logic:** While this script uses "Force Timer" logic and human-like jitter to minimize detection, please understand that no automation is 100% invisible to server-side checks.
+
 A powerful, stealthy, and feature-rich JavaScript tool designed to automatically complete **Discord Quests** (Play, Stream, Watch, and Activities) directly from the Discord client console.
 
 **Developed by [Nattapat2871](https://github.com/Nattapat2871)**
