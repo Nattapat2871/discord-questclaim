@@ -4,7 +4,7 @@
     // ============================================================
     const PREFIX = "[Discord-QuestClaim]";
     
-    console.log(`%c${PREFIX} By Nattapat2871 (v6.5 - General Edition )`, "color: #5865F2; font-weight: bold; font-size: 14px;");
+    console.log(`%c${PREFIX} By Nattapat2871 (v6.6 - General Edition )`, "color: #5865F2; font-weight: bold; font-size: 14px;");
     console.log(`%c${PREFIX} If you want to close this script use \`nam.close()\``, "color: #faa61a");
     console.log(`%c${PREFIX} ⚙️ Initializing...`, "color: cyan");
 
@@ -258,8 +258,8 @@
                 else if (taskType === "WATCH_VIDEO" || taskType === "WATCH_VIDEO_ON_MOBILE") taskIcon = "📺";
                 else if (taskType === "PLAY_ACTIVITY") taskIcon = "🧩";
 
-                const appName = q.config.application?.name || "Unknown";
-                const questDetail = q.config.messages.questName || "No details";
+                const appName = q.config.application?.name || q.config.messages?.questName || "Unknown Game";
+                const questDetail = q.config.messages?.questName || "No details";
                 const displayTitle = `[${taskIcon}] ${appName} / ${questDetail}`;
 
                 const label = document.createElement('label');
@@ -376,18 +376,14 @@
                     
                     await new Promise(r => setTimeout(r, 2000));
                 } else if (unenrolled.length > 0) {
-
                     this.ui.updateStatus("Idle", "Unaccepted quests available! Click the List icon or accept manually.");
-
                     await new Promise(r => setTimeout(r, 3000));
                 } else {
-
                     this.triggerSuccessAudio();
                     this.printLog("🎉 All quests finished!", "color: gold; font-weight: bold");
                     this.printLog("⚠️ Please go to your Discord Quests page and claim your rewards manually.", "color: #faa61a;");
                     this.ui.updateStatus("🎉 All quests finished!", "Please claim your rewards manually.");
                     
-
                     setTimeout(() => this.terminateScript(), 15000);
                     this.isProcessing = false;
                     return; 
@@ -403,8 +399,9 @@
             const target = config.tasks[taskType].target;
             const current = quest.userStatus?.progress?.[taskType]?.value || 0;
             const remaining = target - current;
-            const questName = quest.config.messages.questName;
-            const appName = quest.config.application?.name || "Unknown";
+            const questName = quest.config.messages?.questName || "Unknown Quest";
+            // ดึงชื่อสำรองจาก questName เผื่อกรณีแอปพลิเคชันไม่มีชื่อ
+            const appName = quest.config.application?.name || quest.config.messages?.questName || "Unknown Game";
 
             if (remaining <= 0) return;
 
@@ -505,16 +502,23 @@
         }
 
         async emulateDesktopGame(quest, targetSeconds, taskType) {
-            const applicationId = quest.config.application.id;
-            const applicationName = quest.config.application.name;
+            const applicationId = quest.config.application?.id || quest.config.applicationId || quest.config.application_id || "Unknown_ID";
+            // ดึงชื่อสำรองจาก questName กรณี API ไม่ให้ชื่อแอปมา
+            const applicationName = quest.config.application?.name || quest.config.applicationName || quest.config.messages?.questName || "Unknown Game";
             const processId = Math.floor(Math.random() * 30000) + 1000;
 
             this.ui.updateStatus(`Preparing game data: ${applicationName}...`);
 
             try {
-                const res = await this.m.api.get({url: `/applications/public?application_ids=${applicationId}`});
-                const appData = res.body[0];
-                const targetExeName = appData.executables?.find(x => x.os === "win32")?.name?.replace(">", "") ?? appData.name.replace(/[\/\\:*?"<>|]/g, "");
+                let appData = { name: applicationName, executables: [] };
+                
+                // FIX: ข้ามการยิง API ถ้าค่า ID ที่ได้มาเป็นค่าสำรอง (Unknown_ID) เพื่อป้องกัน 400 Bad Request
+                if (applicationId !== "Unknown_ID") {
+                    const res = await this.m.api.get({url: `/applications/public?application_ids=${applicationId}`});
+                    if (res.body && res.body[0]) appData = res.body[0];
+                }
+                
+                const targetExeName = appData.executables?.find(x => x.os === "win32")?.name?.replace(">", "") ?? appData.name.replace(/[\/\\:*?"<>|]/g, "") + ".exe";
                 
                 const mockedGameData = {
                     cmdLine: `C:\\Program Files\\${appData.name}\\${targetExeName}`,
@@ -548,12 +552,15 @@
                 this.resetDiscordState();
 
             } catch (error) {
-                this.printLog(`⚠️ Error setting up game emulator: ${error.message}`, "color: red");
+                // อัปเดต Error Message ให้แสดงผลได้ชัดเจนและไม่ขึ้น undefined อีก
+                const errorMsg = error.body?.message || error.message || "Unknown API Error or Network Issue";
+                this.printLog(`⚠️ Error setting up game emulator: ${errorMsg}`, "color: red");
             }
         }
 
         async emulateStreaming(quest, targetSeconds, taskType) {
-            const { id, name } = quest.config.application;
+            const id = quest.config.application?.id || quest.config.applicationId || "Unknown_ID";
+            const name = quest.config.application?.name || quest.config.applicationName || quest.config.messages?.questName || "Unknown Game";
             const processId = Math.floor(Math.random() * 30000) + 1000;
 
             this.cachedGetStreamMetadata = this.m.ApplicationStreamingStore.getStreamerActiveStreamMetadata;
@@ -570,8 +577,8 @@
 
         async emulateVideoWatch(quest, target, start) {
             let currentProgress = start;
-            const questName = quest.config.messages.questName;
-            const appName = quest.config.application?.name || "Unknown";
+            const questName = quest.config.messages?.questName || "Unknown Quest";
+            const appName = quest.config.application?.name || quest.config.messages?.questName || "Unknown Game";
             this.ui.updateStatus(`Watching: ${appName}`, `Progress: ${currentProgress}/${target}`);
             
             while (currentProgress < target && this.isActive) {
@@ -600,8 +607,8 @@
         }
 
         async emulateActivity(quest, target) {
-            const questName = quest.config.messages.questName;
-            const appName = quest.config.application?.name || "Unknown";
+            const questName = quest.config.messages?.questName || "Unknown Quest";
+            const appName = quest.config.application?.name || quest.config.messages?.questName || "Unknown Game";
             const activeChannel = this.m.ChannelStore.getSortedPrivateChannels()[0]?.id 
                             ?? Object.values(this.m.GuildChannelStore.getAllGuilds() || {}).find(x => x?.VOCAL?.length > 0)?.VOCAL[0]?.channel.id;
             
