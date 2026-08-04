@@ -4,7 +4,7 @@
     // ============================================================
     const PREFIX = "[Discord-QuestClaim]";
     
-    console.log(`%c${PREFIX} By Nattapat2871 (v6.6 - General Edition )`, "color: #5865F2; font-weight: bold; font-size: 14px;");
+    console.log(`%c${PREFIX} By Nattapat2871 (v6.8 - Deep ID Finder Edition)`, "color: #5865F2; font-weight: bold; font-size: 14px;");
     console.log(`%c${PREFIX} If you want to close this script use \`nam.close()\``, "color: #faa61a");
     console.log(`%c${PREFIX} ⚙️ Initializing...`, "color: cyan");
 
@@ -400,7 +400,6 @@
             const current = quest.userStatus?.progress?.[taskType]?.value || 0;
             const remaining = target - current;
             const questName = quest.config.messages?.questName || "Unknown Quest";
-            // ดึงชื่อสำรองจาก questName เผื่อกรณีแอปพลิเคชันไม่มีชื่อ
             const appName = quest.config.application?.name || quest.config.messages?.questName || "Unknown Game";
 
             if (remaining <= 0) return;
@@ -438,6 +437,7 @@
                 currentProgress = Math.floor(currentProgress || 0);
 
                 let lastLoggedMinute = -1;
+                let failSafeCounter = 0; // ตัวแปรสำหรับจับผิดถ้ายอดไม่ขยับ
 
                 const updateUIProgress = (prog) => {
                     const remaining = Math.max(0, targetSeconds - prog);
@@ -476,6 +476,19 @@
                     let serverProgress = quest.config.configVersion === 1 ? data.userStatus?.streamProgressSeconds : data.userStatus?.progress?.[taskName]?.value;
                     serverProgress = Math.floor(serverProgress || 0);
 
+                    // ถ้ายอดฝั่งเซิร์ฟเวอร์น้อยกว่า 1 (คือ 0) เป็นเวลานาน แสดงว่า ID ผิดแน่นอน
+                    if (serverProgress === 0) {
+                        failSafeCounter++;
+                        if (failSafeCounter > 4) { // ถ้าเต้นหัวใจเกิน 4 ครั้ง (ประมาณ 1 นาทีครึ่ง) แล้วยัง 0
+                            this.printLog(`❌ Fatal: Server is rejecting the game ID. Progress stuck at 0%. Aborting to save time.`, "color: red; font-weight: bold;");
+                            clearInterval(realTimeTick);
+                            this.m.FluxDispatcher.unsubscribe("QUESTS_SEND_HEARTBEAT_SUCCESS", onHeartbeatTick);
+                            return resolve(); // ออกจากลูปการรอ
+                        }
+                    } else {
+                        failSafeCounter = 0; // ถ้ายอดขยับ ให้รีเซ็ตตัวจับผิด
+                    }
+
                     currentProgress = serverProgress;
                     updateUIProgress(currentProgress);
                     
@@ -501,36 +514,80 @@
             });
         }
 
+        getAppId(quest) {
+            // ดึง ID ปกติ
+            let id = quest?.config?.application?.id 
+                || quest?.config?.applicationId 
+                || quest?.config?.application_id 
+                || quest?.applicationId 
+                || quest?.application_id
+                || quest?.targetedApplicationId;
+
+            // FIX: ถ้าหาตามปกติไม่เจอ ให้ใช้ Deep Search ดึงข้อมูลทุกซอกทุกมุม
+            if (!id) {
+                const deepSearchId = (obj) => {
+                    if (!obj || typeof obj !== 'object') return null;
+                    for (const key of Object.keys(obj)) {
+                        // ค้นหาคีย์ที่น่าจะเป็นรหัสแอป และค่าต้องเป็น String ตัวเลขยาวๆ (ไม่ใช่ Quest ID)
+                        if ((key.toLowerCase().includes('applicationid') || key.toLowerCase().includes('application_id') || key === 'id') 
+                            && typeof obj[key] === 'string' 
+                            && obj[key].length >= 17) {
+                            
+                            if (obj[key] !== quest.id) {
+                                return obj[key];
+                            }
+                        }
+                        if (typeof obj[key] === 'object') {
+                            const found = deepSearchId(obj[key]);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                };
+                id = deepSearchId(quest.config) || deepSearchId(quest);
+            }
+            return id;
+        }
+
         async emulateDesktopGame(quest, targetSeconds, taskType) {
-            const applicationId = quest.config.application?.id || quest.config.applicationId || quest.config.application_id || "Unknown_ID";
-            // ดึงชื่อสำรองจาก questName กรณี API ไม่ให้ชื่อแอปมา
+            const applicationId = this.getAppId(quest);
             const applicationName = quest.config.application?.name || quest.config.applicationName || quest.config.messages?.questName || "Unknown Game";
             const processId = Math.floor(Math.random() * 30000) + 1000;
+
+            // FIX: ถ้าพยายามหาด้วย Deep Search แล้วยังไม่เจอ Application ID อีก ให้หยุดทำงานทันที เพื่อไม่ให้เสียเวลารอ 15 นาทีฟรีๆ
+            if (!applicationId) {
+                this.printLog(`❌ Fatal Error: Could not find strict Application ID for "${applicationName}". Discord will not count the time. Skipping quest.`, "color: red; font-weight: bold;");
+                this.ui.updateStatus(`Failed to start`, `Missing Game ID for ${applicationName}`);
+                await new Promise(r => setTimeout(r, 5000));
+                return;
+            }
 
             this.ui.updateStatus(`Preparing game data: ${applicationName}...`);
 
             try {
                 let appData = { name: applicationName, executables: [] };
                 
-                // FIX: ข้ามการยิง API ถ้าค่า ID ที่ได้มาเป็นค่าสำรอง (Unknown_ID) เพื่อป้องกัน 400 Bad Request
-                if (applicationId !== "Unknown_ID") {
+                if (applicationId) {
                     const res = await this.m.api.get({url: `/applications/public?application_ids=${applicationId}`});
                     if (res.body && res.body[0]) appData = res.body[0];
                 }
                 
-                const targetExeName = appData.executables?.find(x => x.os === "win32")?.name?.replace(">", "") ?? appData.name.replace(/[\/\\:*?"<>|]/g, "") + ".exe";
+                let targetExeName = appData.executables?.find(x => x.os === "win32")?.name?.replace(">", "");
+                if (!targetExeName) {
+                    targetExeName = (appData.name || applicationName).replace(/[\/\\:*?"<>|]/g, "") + ".exe";
+                }
                 
                 const mockedGameData = {
-                    cmdLine: `C:\\Program Files\\${appData.name}\\${targetExeName}`,
+                    cmdLine: `C:\\Program Files\\${appData.name || applicationName}\\${targetExeName}`,
                     exeName: targetExeName,
-                    exePath: `c:/program files/${appData.name.toLowerCase()}/${targetExeName}`,
+                    exePath: `c:/program files/${(appData.name || applicationName).toLowerCase()}/${targetExeName}`,
                     hidden: false,
                     isLauncher: false,
-                    id: applicationId,
-                    name: appData.name,
+                    id: applicationId, // ใช้ ID แท้ที่หามาได้ ไม่ใช้ ID ของเควสมั่วๆ อีกต่อไป
+                    name: appData.name || applicationName,
                     pid: processId,
                     pidPath: [processId],
-                    processName: appData.name,
+                    processName: appData.name || applicationName,
                     start: Date.now(),
                 };
 
@@ -543,35 +600,40 @@
                 this.m.RunningGameStore.getGameForPID = (p) => activeGamesList.find(x => x.pid === p);
                 this.m.FluxDispatcher.dispatch({ type: "RUNNING_GAMES_CHANGE", removed: [], added: [mockedGameData], games: activeGamesList });
 
-                this.printLog(`🎮 Emulating game "${applicationName}" (EXE: ${targetExeName})...`, "color: #faa61a; font-weight: bold; font-size: 13px;");
+                this.printLog(`🎮 Emulating game "${applicationName}" (App ID: ${applicationId}, EXE: ${targetExeName})...`, "color: #faa61a; font-weight: bold; font-size: 13px;");
                 
                 await this.monitorServerSync(quest, targetSeconds, taskType, applicationName);
                 
                 this.triggerSuccessAudio();
-                this.printLog(`Quest successfully completed: ${applicationName}`, "color: #57F287");
+                this.printLog(`Quest finished processing: ${applicationName}`, "color: #57F287");
                 this.resetDiscordState();
 
             } catch (error) {
-                // อัปเดต Error Message ให้แสดงผลได้ชัดเจนและไม่ขึ้น undefined อีก
-                const errorMsg = error.body?.message || error.message || "Unknown API Error or Network Issue";
-                this.printLog(`⚠️ Error setting up game emulator: ${errorMsg}`, "color: red");
+                const status = error.status || error.response?.status;
+                const errorMsg = error.body?.message || error.message || "Unknown API Error";
+                this.printLog(`⚠️ Error setting up game emulator: Status ${status}, ${errorMsg}`, "color: red");
             }
         }
 
         async emulateStreaming(quest, targetSeconds, taskType) {
-            const id = quest.config.application?.id || quest.config.applicationId || "Unknown_ID";
+            const id = this.getAppId(quest);
             const name = quest.config.application?.name || quest.config.applicationName || quest.config.messages?.questName || "Unknown Game";
             const processId = Math.floor(Math.random() * 30000) + 1000;
+
+            if (!id) {
+                this.printLog(`❌ Fatal Error: Could not find strict Application ID for streaming "${name}". Skipping quest.`, "color: red; font-weight: bold;");
+                return;
+            }
 
             this.cachedGetStreamMetadata = this.m.ApplicationStreamingStore.getStreamerActiveStreamMetadata;
             this.m.ApplicationStreamingStore.getStreamerActiveStreamMetadata = () => ({ id, pid: processId, sourceName: null });
 
-            this.printLog(`🎥 Emulating stream for "${name}"...`, "color: #faa61a; font-weight: bold; font-size: 13px;");
+            this.printLog(`🎥 Emulating stream for "${name}" (App ID: ${id})...`, "color: #faa61a; font-weight: bold; font-size: 13px;");
             
             await this.monitorServerSync(quest, targetSeconds, taskType, name);
 
             this.triggerSuccessAudio();
-            this.printLog(`Quest successfully completed: ${name}`, "color: #57F287");
+            this.printLog(`Quest finished processing: ${name}`, "color: #57F287");
             this.resetDiscordState();
         }
 
@@ -582,8 +644,8 @@
             this.ui.updateStatus(`Watching: ${appName}`, `Progress: ${currentProgress}/${target}`);
             
             while (currentProgress < target && this.isActive) {
-                const stepForward = Math.min(target, currentProgress + 30);
-                const randomizedDelay = Math.random() * 0.9;
+                const stepForward = Math.min(target, currentProgress + 15);
+                const randomizedDelay = Math.random() * 2;
                 const timestampData = stepForward + randomizedDelay;
 
                 try {
@@ -593,17 +655,28 @@
                     this.ui.updateStatus(`Watching Video...`, `Progress: ${Math.floor(currentProgress)}/${target}`);
                     this.printLog(`📺 Video Sync: ${Math.floor(currentProgress)}/${target}`, "color: #00ffff");
                     
-                    await new Promise(r => setTimeout(r, 2000));
+                    await new Promise(r => setTimeout(r, 10000));
                 } catch (e) {
+                    const status = e.status || e.response?.status;
                     const errorMsg = e.body?.message || e.message || "Unknown Error";
-                    console.warn(`${PREFIX} ⚠️ Network Issue (Retrying...):`, errorMsg);
-                    this.ui.updateStatus(`Connection Issue`, `Retrying...`);
-                    await new Promise(r => setTimeout(r, 5000));
+                    console.warn(`${PREFIX} ⚠️ Video Network Issue: Status ${status} - ${errorMsg}`);
+                    
+                    if (status === 429) {
+                        const retryAfter = e.body?.retry_after || 10;
+                        this.printLog(`⚠️ Rate Limited. Waiting for ${retryAfter} seconds...`, "color: #faa61a");
+                        this.ui.updateStatus(`Rate Limited`, `Retrying in ${retryAfter}s...`);
+                        await new Promise(r => setTimeout(r, (retryAfter * 1000) + 1000));
+                    } else {
+                        this.ui.updateStatus(`Connection Issue`, `Retrying in 5s...`);
+                        await new Promise(r => setTimeout(r, 5000));
+                    }
                 }
             }
             
-            this.triggerSuccessAudio();
-            this.printLog(`Quest successfully completed: ${appName}`, "color: #57F287");
+            if (this.isActive) {
+                this.triggerSuccessAudio();
+                this.printLog(`Quest finished processing: ${appName}`, "color: #57F287");
+            }
         }
 
         async emulateActivity(quest, target) {
@@ -643,7 +716,7 @@
             }
             
             this.triggerSuccessAudio();
-            this.printLog(`Quest successfully completed: ${appName}`, "color: #57F287");
+            this.printLog(`Quest finished processing: ${appName}`, "color: #57F287");
         }
 
         resetDiscordState() {
