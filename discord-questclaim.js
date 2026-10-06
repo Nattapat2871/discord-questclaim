@@ -4,7 +4,7 @@
     // ============================================================
     const PREFIX = "[Discord-QuestClaim]";
     
-    console.log(`%c${PREFIX} By Nattapat2871 (v6.8 - Deep ID Finder Edition)`, "color: #5865F2; font-weight: bold; font-size: 14px;");
+    console.log(`%c${PREFIX} By Nattapat2871 (v6.9 - Vesktop Compatibility)`, "color: #5865F2; font-weight: bold; font-size: 14px;");
     console.log(`%c${PREFIX} If you want to close this script use \`nam.close()\``, "color: #faa61a");
     console.log(`%c${PREFIX} ⚙️ Initializing...`, "color: cyan");
 
@@ -26,6 +26,8 @@
     let QuestsStore = findModule(['getQuest', 'getQuests']);
     let FluxDispatcher = findModule(['dispatch', 'subscribe']);
     let ApplicationStreamingStore = findModule(['getStreamerActiveStreamMetadata']);
+    let PresenceStore = findModule(['getActivities']);
+    let UserStore = findModule(['getCurrentUser']);
     let ChannelStore = findModule(['getChannel', 'getDMFromUserId']); 
     let GuildChannelStore = findModule(['getSFWDefaultChannel']);
 
@@ -40,10 +42,12 @@
     RunningGameStore = getStore(RunningGameStore);
     QuestsStore = getStore(QuestsStore);
     ApplicationStreamingStore = getStore(ApplicationStreamingStore);
+    PresenceStore = getStore(PresenceStore);
+    UserStore = getStore(UserStore);
     ChannelStore = getStore(ChannelStore);
     GuildChannelStore = getStore(GuildChannelStore);
 
-    const modules = { api, RunningGameStore, QuestsStore, FluxDispatcher, ApplicationStreamingStore, ChannelStore, GuildChannelStore };
+    const modules = { api, RunningGameStore, QuestsStore, FluxDispatcher, ApplicationStreamingStore, PresenceStore, UserStore, ChannelStore, GuildChannelStore };
 
     if (!QuestsStore || !RunningGameStore || !FluxDispatcher) {
         console.error(`${PREFIX} ❌ Failed to load modules.`, modules);
@@ -136,7 +140,20 @@
             this.cachedGetGameForPID = null;
             this.cachedGetStreamMetadata = null;
             this.simulatedGameData = null;
-            this.isDesktopClient = typeof DiscordNative !== "undefined";
+            this.isDiscordDesktopClient = typeof DiscordNative !== "undefined";
+            this.isVesktopClient = typeof VesktopNative !== "undefined";
+            this.isDesktopClient = this.isDiscordDesktopClient || this.isVesktopClient;
+            this.vesktopActivityState = new Map();
+            this.vesktopLocalActivities = new Map();
+            this.vesktopActivityListener = data => {
+                const key = data?.socketId || data?.activity?.application_id || "default";
+                if (data?.activity) this.vesktopLocalActivities.set(key, data.activity);
+                else this.vesktopLocalActivities.delete(key);
+            };
+
+            if (this.isVesktopClient && this.m.FluxDispatcher?.subscribe) {
+                this.m.FluxDispatcher.subscribe("LOCAL_ACTIVITY_UPDATE", this.vesktopActivityListener);
+            }
         }
 
         printLog(msg, style = "") {
@@ -413,14 +430,22 @@
             this.printLog(`Processing: [${taskIcon}] ${appName} / ${questName} (${taskType})`, "color: cyan");
 
             if (taskType === "PLAY_ON_DESKTOP") {
-                if (!this.isDesktopClient) {
-                    this.printLog(`⚠️ Skipping ${questName}: Must use Discord Desktop App for this quest.`, "color: red");
+                if (this.isVesktopClient) {
+                    await this.monitorVesktopRealQuest(quest, target, taskType);
+                    return;
+                }
+                if (!this.isDiscordDesktopClient) {
+                    this.printLog(`⚠️ Skipping ${questName}: Play quests require Discord Desktop or Vesktop with real Rich Presence activity.`, "color: red");
                     return;
                 }
                 await this.emulateDesktopGame(quest, target, taskType);
             } else if (taskType === "STREAM_ON_DESKTOP") {
-                if (!this.isDesktopClient) {
-                    this.printLog(`⚠️ Skipping ${questName}: Must use Discord Desktop App for this quest.`, "color: red");
+                if (this.isVesktopClient) {
+                    await this.monitorVesktopRealQuest(quest, target, taskType);
+                    return;
+                }
+                if (!this.isDiscordDesktopClient) {
+                    this.printLog(`⚠️ Skipping ${questName}: Stream quests require Discord Desktop or Vesktop with a real active stream.`, "color: red");
                     return;
                 }
                 await this.emulateStreaming(quest, target, taskType);
@@ -547,6 +572,163 @@
                 id = deepSearchId(quest.config) || deepSearchId(quest);
             }
             return id;
+        }
+
+        getFreshQuest(questId) {
+            try {
+                if (typeof this.m.QuestsStore.getQuest === "function") {
+                    const quest = this.m.QuestsStore.getQuest(questId);
+                    if (quest) return quest;
+                }
+
+                const raw = this.m.QuestsStore.quests
+                    ?? (typeof this.m.QuestsStore.getQuests === "function" ? this.m.QuestsStore.getQuests() : null);
+
+                if (raw instanceof Map) return raw.get(questId) || null;
+                if (Array.isArray(raw)) return raw.find(q => q?.id === questId) || null;
+                return raw?.[questId] || Object.values(raw || {}).find(q => q?.id === questId) || null;
+            } catch (_) {
+                return null;
+            }
+        }
+
+        getQuestProgressValue(quest, taskType) {
+            if (!quest) return 0;
+            if (quest.config?.configVersion === 1 && taskType === "STREAM_ON_DESKTOP") {
+                return Number(quest.userStatus?.streamProgressSeconds || 0);
+            }
+            return Number(quest.userStatus?.progress?.[taskType]?.value || 0);
+        }
+
+        getVesktopRealActivity(quest, taskType) {
+            const applicationId = String(this.getAppId(quest) || "");
+            const applicationName = String(
+                quest.config?.application?.name
+                || quest.config?.applicationName
+                || quest.config?.messages?.questName
+                || ""
+            ).trim().toLowerCase();
+
+            const matchesActivity = activity => {
+                if (!activity) return false;
+                const activityId = String(activity.application_id || activity.applicationId || activity.id || "");
+                const activityName = String(activity.name || "").trim().toLowerCase();
+                if (applicationId && activityId) return activityId === applicationId;
+                return Boolean(applicationName && activityName && activityName === applicationName);
+            };
+
+            if (taskType === "PLAY_ON_DESKTOP") {
+                let games = [];
+                try {
+                    games = this.m.RunningGameStore?.getRunningGames?.() || [];
+                } catch (_) {}
+
+                const game = games.find(entry => {
+                    const entryId = String(entry?.id || entry?.applicationId || "");
+                    const entryName = String(entry?.name || entry?.processName || "").trim().toLowerCase();
+                    if (applicationId && entryId) return entryId === applicationId;
+                    return Boolean(applicationName && entryName && entryName === applicationName);
+                });
+
+                if (game) {
+                    return {
+                        active: true,
+                        detail: game.name || game.processName || null,
+                        source: "running-game-store"
+                    };
+                }
+
+                const activities = [...this.vesktopLocalActivities.values()];
+                try {
+                    const currentUserId = this.m.UserStore?.getCurrentUser?.()?.id;
+                    if (currentUserId) {
+                        const presenceActivities = this.m.PresenceStore?.getActivities?.(currentUserId) || [];
+                        activities.push(...presenceActivities);
+                    }
+                } catch (_) {}
+
+                const activity = activities.find(item => (item?.type === undefined || item?.type === 0) && matchesActivity(item));
+                return {
+                    active: Boolean(activity),
+                    detail: activity?.name || null,
+                    source: activity ? "vesktop-arrpc-presence" : null
+                };
+            }
+
+            if (taskType === "STREAM_ON_DESKTOP") {
+                let stream = null;
+                try {
+                    stream = this.m.ApplicationStreamingStore?.getStreamerActiveStreamMetadata?.() || null;
+                } catch (_) {}
+
+                if (!stream) return { active: false, detail: null, source: null };
+                const streamId = String(stream.id || stream.applicationId || "");
+                if (applicationId && streamId && streamId !== applicationId) {
+                    return { active: false, detail: streamId, source: "stream-store" };
+                }
+                return { active: true, detail: streamId || "active stream", source: "stream-store" };
+            }
+
+            return { active: false, detail: null, source: null };
+        }
+
+        async monitorVesktopRealQuest(quest, targetSeconds, taskType) {
+            const questName = quest.config?.messages?.questName || "Unknown Quest";
+            const appName = quest.config?.application?.name || quest.config?.applicationName || questName;
+            const stateKey = `${quest.id}:${taskType}`;
+            const activity = this.getVesktopRealActivity(quest, taskType);
+
+            if (!activity.active) {
+                if (this.vesktopActivityState.get(stateKey) !== "waiting") {
+                    const action = taskType === "STREAM_ON_DESKTOP"
+                        ? `Start a real Vesktop stream of ${appName}`
+                        : `Start the real game ${appName} and keep Vesktop Rich Presence/arRPC enabled`;
+                    this.printLog(`🟣 Vesktop detected. ${action}. Waiting for real Discord Quest progress...`, "color: #a970ff; font-weight: bold;");
+                    this.vesktopActivityState.set(stateKey, "waiting");
+                }
+                this.ui.updateStatus(`Vesktop: waiting for ${appName}`, "Real game/stream activity is not detected yet.");
+                return;
+            }
+
+            if (this.vesktopActivityState.get(stateKey) !== "active") {
+                this.printLog(`🟣 Vesktop real activity detected for ${appName}. Monitoring server progress...`, "color: #a970ff; font-weight: bold;");
+                this.vesktopActivityState.set(stateKey, "active");
+            }
+
+            let lastProgress = -1;
+            while (this.isActive) {
+                const freshQuest = this.getFreshQuest(quest.id) || quest;
+                const progress = Math.floor(this.getQuestProgressValue(freshQuest, taskType));
+                const remaining = Math.max(0, targetSeconds - progress);
+                const mins = Math.floor(remaining / 60);
+                const secs = remaining % 60;
+
+                this.ui.updateStatus(
+                    `Vesktop: ${appName}`,
+                    `Real progress: ${progress}/${targetSeconds}s (Left: ${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")})`
+                );
+
+                if (progress !== lastProgress) {
+                    this.printLog(`📡 Vesktop real progress: ${progress}/${targetSeconds} seconds`, "color: #b5bac1");
+                    lastProgress = progress;
+                }
+
+                if (progress >= targetSeconds) {
+                    this.vesktopActivityState.delete(stateKey);
+                    this.triggerSuccessAudio();
+                    this.printLog(`✅ Quest completed with real Vesktop activity: ${appName}`, "color: #57F287; font-weight: bold;");
+                    return;
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 5000));
+
+                const currentActivity = this.getVesktopRealActivity(freshQuest, taskType);
+                if (!currentActivity.active) {
+                    this.printLog(`⏸️ Real Vesktop activity for ${appName} is no longer detected. Progress monitor paused.`, "color: #faa61a;");
+                    this.vesktopActivityState.set(stateKey, "waiting");
+                    return;
+                }
+            }
         }
 
         async emulateDesktopGame(quest, targetSeconds, taskType) {
@@ -741,6 +923,15 @@
         terminateScript() {
             this.isActive = false;
             this.isProcessing = false;
+
+            if (this.isVesktopClient && this.vesktopActivityListener && this.m.FluxDispatcher?.unsubscribe) {
+                try {
+                    this.m.FluxDispatcher.unsubscribe("LOCAL_ACTIVITY_UPDATE", this.vesktopActivityListener);
+                } catch (_) {}
+            }
+            this.vesktopLocalActivities.clear();
+            this.vesktopActivityState.clear();
+
             this.resetDiscordState();
             this.ui.destroyInterface();
             

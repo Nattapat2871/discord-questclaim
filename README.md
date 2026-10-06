@@ -57,12 +57,12 @@ A powerful, stealthy, and feature-rich JavaScript tool designed to automatically
 
 ## ⚠️ Important Note
 
-> **This script DOES NOT work in a web browser (Chrome, Edge, etc.) for Game Quests!**
-> Discord has updated their system to check for local processes. You **MUST** use the **Discord Desktop App** (Stable, PTB, or Canary) to complete Play/Stream quests.
+> **Game quests do not work from a normal web browser (Chrome, Edge, etc.).**
+> Use Discord Desktop, or Vesktop with Rich Presence/arRPC enabled and the required game/stream actually running.
 
 ### Vesktop compatibility
 
-Vesktop users can use [`vesktop-quest-monitor.js`](./vesktop-quest-monitor.js) as a read-only compatibility companion. It detects Vesktop through its native preload bridge and shows the real Discord Quest progress plus whether the required game/stream is actually visible to the client.
+`discord-questclaim.js` v6.9 now detects Vesktop through `VesktopNative`. For `PLAY_ON_DESKTOP` and `STREAM_ON_DESKTOP`, Vesktop uses real arRPC/Presence/stream activity and monitors the real Discord Quest progress instead of rejecting the client. [`vesktop-quest-monitor.js`](./vesktop-quest-monitor.js) remains available as a standalone read-only monitor.
 
 - `PLAY_ON_DESKTOP`: start the real required game and keep Vesktop Rich Presence/arRPC enabled.
 - `STREAM_ON_DESKTOP`: start a real stream of the required game in Vesktop.
