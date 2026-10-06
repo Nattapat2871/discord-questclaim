@@ -60,6 +60,15 @@ Language : [🇺🇸 English](README.md) | [🇹🇭 ไทย](README_th.md)
 > **สคริปต์นี้ ไม่สามารถใช้งานบนเว็บเบราว์เซอร์ (Chrome, Edge ฯลฯ) สำหรับเควสประเภทเล่นเกมได้!**
 > เนื่องจาก Discord อัปเดตระบบให้ตรวจสอบโปรเซสในเครื่องคอมพิวเตอร์ คุณ **ต้อง** ใช้ **แอป Discord บน Desktop** (เวอร์ชัน Stable, PTB, หรือ Canary) ในการทำเควส Play/Stream เท่านั้น
 
+### รองรับ Vesktop
+
+ผู้ใช้ Vesktop สามารถใช้ [`vesktop-quest-monitor.js`](./vesktop-quest-monitor.js) เป็นโหมดช่วยตรวจสถานะแบบอ่านอย่างเดียว โดยสคริปต์จะตรวจจับ Vesktop ผ่าน native preload bridge และแสดงความคืบหน้าจริงของ Discord Quest พร้อมสถานะว่าเกมหรือสตรีมจริงถูกมองเห็นโดยไคลเอนต์หรือไม่
+
+- `PLAY_ON_DESKTOP`: เปิดเกมที่เควสต้องการจริง และเปิด Vesktop Rich Presence/arRPC ไว้
+- `STREAM_ON_DESKTOP`: สตรีมเกมที่เควสต้องการจริงผ่าน Vesktop
+- โหมดนี้ **ไม่** สร้างโปรเซสปลอม, stream metadata ปลอม, heartbeat ปลอม หรือ progress ปลอม
+- ปิดได้ทุกเมื่อด้วย `namVesktopMonitor.close()`
+
 ## 🛠️ สิ่งที่ต้องเตรียม: การเปิดใช้งาน Developer Console
 
 ตามปกติแล้วแอป Discord จะปิดการเข้าถึง Developer Console ไว้ คุณต้องทำการเปิดใช้งานก่อนจึงจะสามารถวางสคริปต์ได้ เราได้เตรียมคำสั่งแบบบรรทัดเดียวเพื่อให้คุณทำขั้นตอนนี้ได้โดยอัตโนมัติ!

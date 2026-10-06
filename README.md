@@ -60,6 +60,15 @@ A powerful, stealthy, and feature-rich JavaScript tool designed to automatically
 > **This script DOES NOT work in a web browser (Chrome, Edge, etc.) for Game Quests!**
 > Discord has updated their system to check for local processes. You **MUST** use the **Discord Desktop App** (Stable, PTB, or Canary) to complete Play/Stream quests.
 
+### Vesktop compatibility
+
+Vesktop users can use [`vesktop-quest-monitor.js`](./vesktop-quest-monitor.js) as a read-only compatibility companion. It detects Vesktop through its native preload bridge and shows the real Discord Quest progress plus whether the required game/stream is actually visible to the client.
+
+- `PLAY_ON_DESKTOP`: start the real required game and keep Vesktop Rich Presence/arRPC enabled.
+- `STREAM_ON_DESKTOP`: start a real stream of the required game in Vesktop.
+- This compatibility mode does **not** create fake processes, fake stream metadata, synthetic heartbeats, or synthetic quest progress.
+- Close it at any time with `namVesktopMonitor.close()`.
+
 ## 🛠️ Prerequisites: Enable Developer Console
 
 By default, Discord disables the Developer Console. You must enable it first to be able to paste the script. We have prepared a quick command to do this for you automatically!
