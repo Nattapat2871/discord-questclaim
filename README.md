@@ -67,7 +67,9 @@ A powerful, stealthy, and feature-rich JavaScript tool designed to automatically
 - `PLAY_ON_DESKTOP`: start the real required game and keep Vesktop Rich Presence/arRPC enabled.
 - `STREAM_ON_DESKTOP`: start a real stream of the required game in Vesktop.
 - This compatibility mode does **not** create fake processes, fake stream metadata, synthetic heartbeats, or synthetic quest progress.
-- Close it at any time with `namVesktopMonitor.close()`.
+- Close the standalone monitor at any time with `namVesktopMonitor.close()`.
+- In the main script, run `nam.debugVesktop()` to print a safe diagnostic snapshot of the real games, arRPC activities, presence activities, and stream metadata Vesktop currently exposes.
+- If all activity lists are empty, enable Discord **Activity Privacy > Share your detected activities with others** and Vesktop **Rich Presence / arRPC**. Some games are not detectable by Vesktop/arRPC, so a PLAY_ON_DESKTOP quest cannot start until a matching real activity is visible.
 
 ## 🛠️ Prerequisites: Enable Developer Console
 

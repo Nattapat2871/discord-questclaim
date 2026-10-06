@@ -4,7 +4,7 @@
     // ============================================================
     const PREFIX = "[Discord-QuestClaim]";
     
-    console.log(`%c${PREFIX} By Nattapat2871 (v6.9 - Vesktop Compatibility)`, "color: #5865F2; font-weight: bold; font-size: 14px;");
+    console.log(`%c${PREFIX} By Nattapat2871 (v6.10 - Vesktop Diagnostics)`, "color: #5865F2; font-weight: bold; font-size: 14px;");
     console.log(`%c${PREFIX} If you want to close this script use \`nam.close()\``, "color: #faa61a");
     console.log(`%c${PREFIX} ⚙️ Initializing...`, "color: cyan");
 
@@ -427,7 +427,11 @@
             else if (taskType === "WATCH_VIDEO" || taskType === "WATCH_VIDEO_ON_MOBILE") taskIcon = "📺";
             else if (taskType === "PLAY_ACTIVITY") taskIcon = "🧩";
 
-            this.printLog(`Processing: [${taskIcon}] ${appName} / ${questName} (${taskType})`, "color: cyan");
+            const stateKey = `${quest.id}:${taskType}`;
+            const vesktopDesktopTask = this.isVesktopClient && (taskType === "PLAY_ON_DESKTOP" || taskType === "STREAM_ON_DESKTOP");
+            if (!vesktopDesktopTask || !this.vesktopActivityState.has(stateKey)) {
+                this.printLog(`Processing: [${taskIcon}] ${appName} / ${questName} (${taskType})`, "color: cyan");
+            }
 
             if (taskType === "PLAY_ON_DESKTOP") {
                 if (this.isVesktopClient) {
@@ -672,6 +676,73 @@
             return { active: false, detail: null, source: null };
         }
 
+        getVesktopDebugSnapshot() {
+            const safeActivity = activity => activity ? {
+                name: activity.name || null,
+                applicationId: activity.application_id || activity.applicationId || activity.id || null,
+                type: activity.type ?? null,
+                details: activity.details || null,
+                state: activity.state || null
+            } : null;
+
+            let runningGames = [];
+            let presenceActivities = [];
+            let stream = null;
+            let currentUserId = null;
+            let vesktopVersion = null;
+
+            try {
+                runningGames = (this.m.RunningGameStore?.getRunningGames?.() || []).map(game => ({
+                    name: game?.name || game?.processName || null,
+                    applicationId: game?.id || game?.applicationId || null,
+                    exeName: game?.exeName || null,
+                    pid: game?.pid || null
+                }));
+            } catch (_) {}
+
+            try {
+                currentUserId = this.m.UserStore?.getCurrentUser?.()?.id || null;
+                if (currentUserId) {
+                    presenceActivities = (this.m.PresenceStore?.getActivities?.(currentUserId) || []).map(safeActivity);
+                }
+            } catch (_) {}
+
+            try {
+                stream = this.m.ApplicationStreamingStore?.getStreamerActiveStreamMetadata?.() || null;
+            } catch (_) {}
+
+            try {
+                vesktopVersion = typeof VesktopNative !== "undefined" ? VesktopNative.app?.getVersion?.() || null : null;
+            } catch (_) {}
+
+            const snapshot = {
+                client: {
+                    vesktopDetected: this.isVesktopClient,
+                    discordDesktopDetected: this.isDiscordDesktopClient,
+                    vesktopVersion
+                },
+                runningGames,
+                localArRPCActivities: [...this.vesktopLocalActivities.values()].map(safeActivity),
+                presenceActivities,
+                stream: stream ? {
+                    applicationId: stream.id || stream.applicationId || null,
+                    pid: stream.pid || null,
+                    sourceName: stream.sourceName || null
+                } : null,
+                guidance: [
+                    "Enable Discord Settings > Activity Privacy > Share your detected activities with others.",
+                    "Enable Vesktop Settings > Rich Presence / arRPC.",
+                    "If Vesktop still reports no game activity, the game may not be detectable by Vesktop/arRPC."
+                ]
+            };
+
+            console.log(`${PREFIX} Vesktop debug snapshot:`, snapshot);
+            if (runningGames.length) console.table(runningGames);
+            if (presenceActivities.length) console.table(presenceActivities);
+            if (snapshot.localArRPCActivities.length) console.table(snapshot.localArRPCActivities);
+            return snapshot;
+        }
+
         async monitorVesktopRealQuest(quest, targetSeconds, taskType) {
             const questName = quest.config?.messages?.questName || "Unknown Quest";
             const appName = quest.config?.application?.name || quest.config?.applicationName || questName;
@@ -683,10 +754,10 @@
                     const action = taskType === "STREAM_ON_DESKTOP"
                         ? `Start a real Vesktop stream of ${appName}`
                         : `Start the real game ${appName} and keep Vesktop Rich Presence/arRPC enabled`;
-                    this.printLog(`🟣 Vesktop detected. ${action}. Waiting for real Discord Quest progress...`, "color: #a970ff; font-weight: bold;");
+                    this.printLog(`🟣 Vesktop detected, but no matching real game/stream activity is visible. ${action}. Also enable Discord Activity Privacy and Vesktop Rich Presence/arRPC. Run nam.debugVesktop() to inspect detected activity.`, "color: #a970ff; font-weight: bold;");
                     this.vesktopActivityState.set(stateKey, "waiting");
                 }
-                this.ui.updateStatus(`Vesktop: waiting for ${appName}`, "Real game/stream activity is not detected yet.");
+                this.ui.updateStatus(`Vesktop: waiting for ${appName}`, "No matching activity detected. Check Activity Privacy + Rich Presence; run nam.debugVesktop().");
                 return;
             }
 
@@ -944,6 +1015,9 @@
     }
 
     const runner = new QuestAutomator(modules);
-    window.nam = { close: () => runner.terminateScript() };
+    window.nam = {
+        close: () => runner.terminateScript(),
+        debugVesktop: () => runner.getVesktopDebugSnapshot()
+    };
     runner.startFarming();
 })();

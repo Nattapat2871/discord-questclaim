@@ -67,7 +67,9 @@ Language : [🇺🇸 English](README.md) | [🇹🇭 ไทย](README_th.md)
 - `PLAY_ON_DESKTOP`: เปิดเกมที่เควสต้องการจริง และเปิด Vesktop Rich Presence/arRPC ไว้
 - `STREAM_ON_DESKTOP`: สตรีมเกมที่เควสต้องการจริงผ่าน Vesktop
 - โหมดนี้ **ไม่** สร้างโปรเซสปลอม, stream metadata ปลอม, heartbeat ปลอม หรือ progress ปลอม
-- ปิดได้ทุกเมื่อด้วย `namVesktopMonitor.close()`
+- ปิดตัว monitor แยกได้ทุกเมื่อด้วย `namVesktopMonitor.close()`
+- ในสคริปต์หลัก ใช้ `nam.debugVesktop()` เพื่อพิมพ์ diagnostic snapshot แบบปลอดภัยว่า Vesktop มองเห็นเกมจริง, arRPC activity, presence activity และ stream metadata อะไรอยู่บ้าง
+- ถ้ารายการ activity ว่างทั้งหมด ให้เปิด Discord **Activity Privacy > Share your detected activities with others** และ Vesktop **Rich Presence / arRPC**; เกมบางเกมอาจไม่ถูก Vesktop/arRPC ตรวจพบ จึงเริ่มเควส `PLAY_ON_DESKTOP` ไม่ได้จนกว่าจะมี real activity ที่ตรงกัน
 
 ## 🛠️ สิ่งที่ต้องเตรียม: การเปิดใช้งาน Developer Console
 
